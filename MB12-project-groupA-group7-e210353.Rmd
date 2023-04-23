@@ -1,0 +1,674 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+```{r}
+install.packages("maps")
+install.packages("mapdata")
+```
+
+
+```{r}
+library(tidyverse)
+library(dplyr)
+library(mapdata)
+library(maps)
+```
+
+
+```{r}
+df_death <- read.csv('/Users/farah/Documents/Term 2 Courses/Analytical Modeling /Group Project/natural-disasters.csv')
+df_death
+```
+We can see the above dataset contains data from the year 1900s.
+
+Data Transformation:
+```{r}
+# Remove rows with all years until 2012
+df_filtered <- df_death %>% 
+  filter(df_death$Year >= 2012)
+df_filtered
+```
+
+```{r}
+column_names <- names(df_filtered)
+print(column_names)
+```
+
+Since, there are a large number of columns, we are dropping those columns which do not contain the word death or total and people in them
+```{r}
+#remove all columns without the word death or total & people in them
+df_death <- df_filtered %>% select(contains("death") | contains( "total") & contains("people") | contains("Year") | contains("Country"))
+
+#Reorder the column names
+df_death <- df_death %>%
+  select('Country.name','Year', everything())
+```
+
+Updated columns list:
+```{r}
+column_names <- names(df_death)
+print(column_names)
+```
+
+
+```{r}
+# Check data types of columns in df_death
+sapply(df_death, class)
+```
+
+Summary statistics for each variable:
+```{r}
+# Calculate summary statistics for each variable
+df_summary <- df_death %>% 
+  select(-c(Year, Country.name)) %>% 
+  summarise(across(everything(), list(mean = ~mean(., na.rm = TRUE),
+                                      max = ~max(., na.rm = TRUE),
+                                      min = ~min(., na.rm = TRUE),
+                                      sd = ~sd(., na.rm = TRUE),
+                                      median = ~median(., na.rm = TRUE))))
+df_summary
+```
+```{r}
+#summary 
+df_summary_long <- df_summary %>% 
+  pivot_longer(cols = everything(),
+               names_to = c("variable", ".value"),
+               names_pattern = "(.*)_(.*)")
+
+df_summary_long
+```
+
+Exporting the updated columns dataset to a csv file.
+```{r}
+df_death <- df_death %>% 
+  select(Country.name,Year, everything())
+write.csv(df_death, '/Users/farah/Downloads/natural-disasters_final.csv', row.names=TRUE)
+```
+
+
+Check the number of unique countries in the dataset
+```{r}
+n_distinct(df_death$Country.name)
+unique(df_death$Country.name)
+```
+
+There are some values such as low/medium/high income countries, World and region name. 
+```{r}
+#Creating a df_world dataset containing world country values
+df_world <- df_death %>% 
+  filter(Country.name == 'World')
+df_world
+```
+
+
+Visualizing distributions
+
+1. Examining distribution of continuous variable using histogram
+```{r}
+df_death %>%
+  ggplot(aes(Number.of.deaths.from.disasters)) +
+  geom_histogram(binwidth = 500)
+```
+
+```{r}
+df_death %>%
+  ggplot(aes(Number.of.deaths.from.disasters)) +
+  geom_histogram(binwidth = 5) +
+  coord_cartesian(xlim = c(0, 50))
+```
+We can see above that the count for the number of deaths due to disasters is the highest when number of deaths ranges between 0 to 10 for each country.
+
+Observing the numbers for different bin widths of the number of deaths from disasters
+```{r}
+df_death %>%
+  count(cut_width(Number.of.deaths.from.disasters, 500))
+```
+
+```{r}
+df_death %>%
+  ggplot(aes(Number.of.deaths.from.disasters)) +
+  geom_histogram(binwidth = 1) +
+  coord_cartesian(xlim = c(0, 50))
+```
+
+Observing the outliers where the number of deaths from disasters is very high:
+```{r}
+df_death %>%
+  ggplot(aes(Number.of.deaths.from.disasters)) +
+  geom_histogram(binwidth = 50) +
+  coord_cartesian(ylim = c(0, 50))
+```
+
+Analyzing the rows where number.of.deaths.from.disasters is greater than 5000. We can see Nepal in 2015 had the highest number of deaths.
+```{r}
+df_death %>%
+  filter(Number.of.deaths.from.disasters > 5000) %>%
+  arrange(desc(Number.of.deaths.from.disasters)) %>%
+  select(Number.of.deaths.from.disasters, Country.name, Year)
+```
+
+
+#Milestone 2-a: The sequence of questions and findings.
+
+Question 1: What are the total number of deaths from disasters per year worldwide?
+```{r}
+library(ggplot2)
+
+total_deaths_by_year <- df_death %>% filter(Country.name == "World")%>% 
+  group_by(Year) %>% summarise(total_deaths = sum(Number.of.deaths.from.disasters))
+
+ggplot(total_deaths_by_year, aes(x = Year, y = total_deaths)) + 
+  geom_bar(stat = "identity", fill = "darkblue") +
+  labs(title = "Total Number of Deaths from Disasters per Year (World)",
+       x = "Year",
+       y = "Average Number of Deaths") +
+  theme_bw() +
+  scale_x_continuous(breaks = seq(min(total_deaths_by_year$Year), max(total_deaths_by_year$Year), by = 1))
+```
+Highest number of deaths due to natural disasters occured in the years 2013 and 2015 in the past decade.
+
+
+Question 2:What types of natural disasters had the highest number of deaths in the past decade?
+```{r}
+#Line chart over past decade for different types of disasters
+library(ggplot2)
+ggplot(df_world, aes(x = Year)) +
+  geom_line(aes(y = Number.of.deaths.from.drought, color = "Number.of.deaths.from.drought")) +
+  geom_line(aes(y = Number.of.deaths.from.earthquakes, color = "Number.of.deaths.from.earthquakes")) +
+  geom_line(aes(y = Number.of.deaths.from.volcanic.activity, color = "Number.of.deaths.from.volcanic.activity")) +
+  geom_line(aes(y = Number.of.deaths.from.floods, color = "Number.of.deaths.from.floods")) +
+  geom_line(aes(y = Number.of.deaths.from.mass.movements, color = "Number.of.deaths.from.mass.movements")) +
+  geom_line(aes(y = Number.of.deaths.from.storms, color = "Number.of.deaths.from.storms")) +
+  geom_line(aes(y = Number.of.deaths.from.landslides, color = "Number.of.deaths.from.landslides")) +
+  geom_line(aes(y = Number.of.deaths.from.fog, color = "Number.of.deaths.from.fog")) +
+  geom_line(aes(y = Number.of.deaths.from.wildfires, color = "Number.of.deaths.from.wildfires")) +
+  geom_line(aes(y = Number.of.deaths.from.extreme.temperatures, color = "Number.of.deaths.from.extreme.temperatures")) +
+  geom_line(aes(y = Number.of.deaths.from.glacial.lake.outbursts, color = "Number.of.deaths.from.glacial.lake.outbursts")) +
+  labs(color = "Series") +
+  xlab("X") +
+  ylab("Y") +
+  ggtitle("Line Chart for number of deaths for different types of disasters over the past decade")+
+  scale_x_continuous(breaks = seq(min(total_deaths_by_year$Year), max(total_deaths_by_year$Year), by = 1))
+
+```
+We can see from the above line chart that the global number of deaths in 2013 were the highest due to floods and in 2015 due to earthquakes.
+
+Filtering out the non-country names/values:
+```{r}
+df_death_country <- df_death %>% 
+  filter(Country.name!='World')
+
+df_death_country <- df_death %>%
+  filter(!(Country.name %in% c("World", "Africa", "Asia", "European Union (27)", "Europe", "North America", "South America", "Oceania"))) %>%
+  filter(!grepl("income", Country.name))
+
+unique(df_death_country$Country.name)
+```
+
+Question 3: Which country was most affected by the floods in 2013?
+```{r}
+#Dive deeper into 2013 and 2015 to analyse which country was most affected by the above disasters 
+
+# Select columns containing "flood" in their name
+flood_cols <- c("Country.name", "Year", grep("flood", names(df_death_country), value = TRUE))
+df_country_flood <- df_death_country[, flood_cols]
+
+df_death_flood_2013 <- df_country_flood %>% 
+  group_by(Country.name,Year) %>% 
+  summarise(Number.of.deaths = sum(Number.of.deaths.from.floods), Number.of.people.affected = sum(Number.of.total.people.affected.by.floods)) %>% 
+  filter(Year == "2013") %>% 
+  arrange(desc(Number.of.deaths))
+df_death_flood_2013
+```
+In 2013, the country that was most affected by floods was India with number of deaths = 6453
+
+Question 4: Which country was most affected by the storms in 2013?
+```{r}
+# Select columns containing "storm" in their name
+storm_cols <- c("Country.name", "Year", grep("storm", names(df_death_country), value = TRUE))
+df_country_storm <- df_death_country[, storm_cols]
+
+df_death_storm_2013 <- df_country_storm %>% 
+  group_by(Country.name, Year) %>% 
+  summarize(Number.of.deaths = sum(Number.of.deaths.from.storms), Number.of.people.affected = sum(Number.of.total.people.affected.by.storms)) %>% 
+  filter(Year == "2013") %>% 
+  arrange(desc(Number.of.deaths))
+
+most_affected_country_storm_2013 <- df_death_storm_2013$Country.name[1]
+most_affected_country_storm_2013
+```
+
+
+Question 5: Which country was most affected by the earthquakes in 2015?
+```{r}
+#Dive deeper into 2013 and 2015 to analyse which country was most affected by the above disasters 
+
+# Select columns containing "flood" in their name
+earthquake_cols <- c("Country.name", "Year", grep("earthquake", names(df_death_country), value = TRUE))
+df_country_earthquake <- df_death_country[, earthquake_cols]
+
+df_country_earthquake %>% 
+  group_by(Country.name,Year) %>% 
+  summarise(Number.of.deaths = sum(Number.of.deaths.from.earthquakes), Number.of.people.affected = sum(Number.of.total.people.affected.by.earthquakes)) %>% 
+  filter(Year == "2015") %>% 
+  arrange(desc(Number.of.deaths))
+```
+In 2015, the country that was most affected by earthquakes was Nepal with number of deaths = 8969
+
+
+Question 6: Which country has the highest proportion of deaths due to natural disasters as compared to the total number of global deaths due to disasters?
+```{r}
+install.packages("gapminder")
+library(gapminder)
+install.packages("ggplot2")
+library(ggplot2)
+library(maps)
+library(mapdata)
+world <- map_data("world")
+
+df1 <- df_death_country %>% 
+  group_by(Country.name) %>% 
+  summarize(Number.of.deaths.from.disasters.in.last.decade = sum(Number.of.deaths.from.disasters))
+
+Total.deaths.from.disasters = sum(df1$Number.of.deaths.from.disasters.in.last.decade)
+
+df_death_prop <- df1 %>% 
+  mutate(death.proportion = round((Number.of.deaths.from.disasters.in.last.decade/Total.deaths.from.disasters)*100, 2)) %>% 
+  arrange(desc(death.proportion))
+
+ggplot() +
+  geom_map(data = df_death_prop, map = world,
+           aes(map_id = Country.name, fill = death.proportion),
+           color = "black", size = 0.5) +
+  scale_fill_gradient(low = "white", high = "blue", name = "Percentage of deaths") +
+  expand_limits(x = world$long, y = world$lat) +
+  theme_void()
+```
+From the above figure, India and China have the highest proportion of deaths due to natural disasters in the past decade. 
+
+
+Question 7: Which type of disaster is the most fatal in India?
+```{r}
+df_death_india <- df_death_country %>% 
+  filter(Country.name == 'India')
+df_death_india
+
+# Convert the data frame from wide to long format using tidyr
+df_death_india_long <- pivot_longer(df_death_india, cols = c("Number.of.deaths.from.drought", "Number.of.deaths.from.earthquakes", "Number.of.deaths.from.volcanic.activity","Number.of.deaths.from.floods","Number.of.deaths.from.mass.movements","Number.of.deaths.from.storms","Number.of.deaths.from.landslides","Number.of.deaths.from.fog","Number.of.deaths.from.wildfires","Number.of.deaths.from.extreme.temperatures","Number.of.deaths.from.glacial.lake.outbursts"), names_to = "variable", values_to = "value") 
+
+# Create the stacked bar chart
+ggplot(df_death_india_long, aes(x = Year, y = value, fill = variable)) + 
+  geom_bar(stat = "identity") +
+  labs(x = "Category", y = "Value", fill = "Variable") +
+  ggtitle("Stacked Bar Chart for Different types of disasters in India in last decade") +
+  scale_x_continuous(breaks = seq(min(total_deaths_by_year$Year), max(total_deaths_by_year$Year), by = 1))
+```
+The most fatal disaster in India has been floods in the last decade. 
+
+
+Question 8: What were the total number of deaths in India due to floods?
+```{r}
+df_death_india_long <- df_death_india_long %>% 
+  select("Country.name","Year","variable","value")
+
+df_death_india_long %>%
+  group_by(variable) %>%
+  summarise(total_deaths = sum(value)) %>% 
+  filter(variable=='Number.of.deaths.from.floods')
+```
+There were 18397 deaths due to earthquake in India in the last decade.
+
+
+Question 9: Which type of disaster is the most fatal in China?
+```{r}
+df_death_china <- df_death_country %>% 
+  filter(Country.name == 'China')
+df_death_china
+
+# Convert the data frame from wide to long format using tidyr
+df_death_china_long <- pivot_longer(df_death_china, cols = c("Number.of.deaths.from.drought", "Number.of.deaths.from.earthquakes", "Number.of.deaths.from.volcanic.activity","Number.of.deaths.from.floods","Number.of.deaths.from.mass.movements","Number.of.deaths.from.storms","Number.of.deaths.from.landslides","Number.of.deaths.from.fog","Number.of.deaths.from.wildfires","Number.of.deaths.from.extreme.temperatures","Number.of.deaths.from.glacial.lake.outbursts"), names_to = "variable", values_to = "value") 
+
+# Create the stacked bar chart
+ggplot(df_death_china_long, aes(x = Year, y = value, fill = variable)) + 
+  geom_bar(stat = "identity") +
+  labs(x = "Category", y = "Value", fill = "Variable") +
+  ggtitle("Stacked Bar Chart for Different types of disasters in China in last decade") +
+  scale_x_continuous(breaks = seq(min(total_deaths_by_year$Year), max(total_deaths_by_year$Year), by = 1))
+```
+The most fatal disaster in China has been also due to floods in the last decade. 
+
+
+Question 10: What were the total number of deaths in China due to floods?
+```{r}
+df_death_china_long <- df_death_china_long %>% 
+  select("Country.name","Year","variable","value")
+
+df_death_china_long %>%
+  group_by(variable) %>%
+  summarise(total_deaths = sum(value)) %>% 
+  filter(variable=='Number.of.deaths.from.floods')
+```
+There were 4580 deaths due to floods in China in the last decade.
+
+
+Question 11: Which were the most fatal disasters each year in the last decade?
+```{r}
+cols <- c("Country.name", "Year", grep("Number.of.deaths", names(df_world), value = TRUE))
+df_2 <- df_world[, cols]
+
+df_2 <- pivot_longer(df_2, cols = c("Number.of.deaths.from.drought", "Number.of.deaths.from.earthquakes", "Number.of.deaths.from.volcanic.activity","Number.of.deaths.from.floods","Number.of.deaths.from.mass.movements","Number.of.deaths.from.storms","Number.of.deaths.from.landslides","Number.of.deaths.from.fog","Number.of.deaths.from.wildfires","Number.of.deaths.from.extreme.temperatures","Number.of.deaths.from.glacial.lake.outbursts"), names_to = "variable", values_to = "value")
+
+df2 <- df_2 %>% 
+  select(Country.name,Year,variable,value) %>% 
+  group_by(Year) %>% 
+  summarise(variable = variable[which.max(value)], 
+            max_value = max(value, na.rm = TRUE))
+
+df_plot <- df_2 %>% 
+  select(Country.name, Year, variable, value) %>% 
+  group_by(Year) %>% 
+  summarise(variable = variable[which.max(value)], 
+            max_value = max(value, na.rm = TRUE))
+
+ggplot(df_plot, aes(x = Year, y = max_value, fill = variable)) +
+  geom_bar(stat = "identity") +
+  labs(x = "Year", y = "Maximum Value", fill = "Variable") +
+  scale_x_continuous(breaks = seq(min(total_deaths_by_year$Year), max(total_deaths_by_year$Year), by = 1))
+
+
+```
+Most fatal deaths in the last decade were due to earthquakes, extreme temperatures and floods.
+
+
+Question 11: Which was the most fatal disaster in 2022?
+```{r}
+df2 %>% 
+  filter(Year==2022)
+```
+The most fatal disaster in the year 2022 was due to floods.
+
+
+Question 12: What are the top 10 countries in terms of death due to natural disasters from 2012 to 2016?
+```{r}
+top_10_2012 <- df_death_country %>%
+  filter(Year == 2012) %>%
+  arrange(desc(Number.of.deaths.from.disasters)) %>%
+  slice(1:5)
+
+top_10_2013 <- df_death_country %>%
+  filter(Year == 2013) %>%
+  arrange(desc(Number.of.deaths.from.disasters)) %>%
+  slice(1:5)
+
+top_10_2014 <- df_death_country %>%
+  filter(Year == 2014) %>%
+  arrange(desc(Number.of.deaths.from.disasters)) %>%
+  slice(1:5)
+
+top_10_2015 <- df_death_country %>%
+  filter(Year == 2015) %>%
+  arrange(desc(Number.of.deaths.from.disasters)) %>%
+  slice(1:5)
+
+top_10_2016 <- df_death_country %>%
+  filter(Year == 2016) %>%
+  arrange(desc(Number.of.deaths.from.disasters)) %>%
+  slice(1:5)
+
+top_10_countries <- rbind(top_10_2012,top_10_2013,top_10_2014,top_10_2015,top_10_2016)
+
+ggplot(top_10_countries, aes(x = Year, y = Number.of.deaths.from.disasters, group = Country.name, color = Country.name)) +
+  geom_line(linewidth = 1) +
+  scale_color_discrete(name = "Country") +
+  ggtitle("Top 10 Countries in terms of deaths due to natural disasters (2012 to 2016)") +
+  xlab("Year") +
+  ylab("Total deaths") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 1))
+```
+We can see that the top county in terms of death due to natural disasters in Nepal and India closely followed by the Philippines.
+
+
+Question 13: What are the total number of people affected due to natural disasters region wise in the last decade?
+```{r}
+df_region <- df_death %>%
+  filter((Country.name %in% c("Africa", "Asia", "European Union (27)","Europe", "North America", "South America", "Oceania")))
+
+total_affected_cols <- c("Country.name", "Year", grep("Number.of.total.people.affected", names(df_region), value = TRUE))
+df_total_affected_region <- df_region[, total_affected_cols]
+
+colnames(df_total_affected_region) <- gsub("Number\\.of\\.total\\.people\\.affected\\.by\\.", "", colnames(df_total_affected_region))
+
+df_total_affected_region_pivot <- df_total_affected_region %>%
+  pivot_longer(-c(Country.name, Year), names_to = "Variable", values_to = "Value")
+
+df_total_affected_region_pivot <- df_total_affected_region_pivot %>% 
+  group_by(Country.name,Variable) %>% 
+  summarise(total.number.of.people.affected = sum(Value, na.rm = T))
+
+df_total_affected_region_pivot %>%
+  ggplot() +
+  geom_tile(aes(Country.name,
+  Variable,
+  fill = total.number.of.people.affected)) +
+  scale_fill_viridis_c(option = "C",
+  guide = "legend") +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5)) #rotate x-axis labels by 90 degrees
+
+```
+We can see that Asia has been the most affected by natural disasters mainly due to droughts, floods and storms.
+
+
+Question 14: What is the death rate from natural disasters region wise in the last decade?
+```{r}
+df_region
+
+death_rates_cols <- c("Country.name", "Year", grep("Death.rates.from", names(df_region), value = TRUE))
+df_death_region <- df_region[, death_rates_cols]
+
+colnames(df_death_region) <- gsub("Death\\.rates\\.from\\.", "", colnames(df_death_region))
+
+df_death_region_pivot <- df_death_region %>%
+  pivot_longer(-c(Country.name, Year), names_to = "Variable", values_to = "Value")
+
+df_death_region_pivot <- df_death_region_pivot %>% 
+  group_by(Country.name,Variable) %>% 
+  summarise(death.rate = sum(Value, na.rm = T))
+
+df_death_region_pivot %>%
+  ggplot() +
+  geom_tile(aes(Country.name,
+  Variable,
+  fill = death.rate)) +
+  scale_fill_viridis_c(option = "C",
+  guide = "legend") +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5)) #rotate x-axis labels by 90 degrees
+
+```
+We see that the death rate higher in the Europe and European union due to extreme temperatures, followed by floods in other regions. 
+
+
+Question 15: What is the correlation between death rate and total number of people affected country wise?
+```{r}
+df_death_country %>%
+  ggplot() +
+  geom_bin2d(
+  aes(x = log2(Number.of.total.people.affected.by.disasters),
+  y = log2(Death.rates.from.disasters))
+  ) +
+  scale_fill_viridis_c(option = "H")
+```
+We can see that as the total number of people affected by disasters increases, the death rate also increases.
+
+Question 16: How does the economic condition of a country impact the total number of people affected due to natural disasters?
+```{r}
+df_economic <- df_death %>%
+  filter(grepl("income", Country.name))
+
+total_affected_cols <- c("Country.name", "Year", grep("Number.of.total.people.affected", names(df_economic), value = TRUE))
+df_total_affected_economic <- df_economic[, total_affected_cols]
+
+colnames(df_total_affected_economic) <- gsub("Number\\.of\\.total\\.people\\.affected\\.by\\.", "", colnames(df_total_affected_economic))
+
+df_total_affected_economic_pivot <- df_total_affected_economic %>%
+  pivot_longer(-c(Country.name, Year), names_to = "Variable", values_to = "Value")
+
+df_total_affected_economic_pivot <- df_total_affected_economic_pivot %>% 
+  group_by(Country.name,Variable) %>% 
+  summarise(total.number.of.people.affected = sum(Value, na.rm = T))
+
+df_total_affected_economic_pivot %>%
+  filter(!is.na(Country.name)) %>%
+  ggplot() +
+  geom_density(
+  aes(x = log2(total.number.of.people.affected),
+  color = Country.name,
+  fill = Country.name),
+  alpha = 0.5
+  )
+```
+The low-income countries have a comparatively higher number of people affected due to natural disasters. 
+
+ 
+#Milestone 2-b: Present the finding in tables
+1. Top 10 countries affected by floods in 2013 which contributed to the highest number of deaths from disasters in the last decade.
+```{r}
+library(knitr)
+
+# Sort the data
+df_death_flood_2013 <- df_death_flood_2013 %>%
+  arrange(desc(Number.of.deaths))
+
+# Display the top 10 rows as a table with captions
+kable(head(df_death_flood_2013, 10), caption = "Top 10 countries affected by floods in 2013 which contributed to the highest number of deaths from disasters in the last decade.")
+
+```
+
+
+2. Top 10 countries which have the highest proportion of deaths from natural disasters in the past decade.
+```{r}
+head(df_death_prop,10)
+kable(head(df_death_prop, 10), caption = "Top 10 countries which have the highest proportion of deaths from natural disasters in the past decade.")
+```
+
+
+#Milestone 2-c: Present the finding in figures
+
+Figure 1: Top 3 countries per Year in terms of death due to Natural Disaster
+```{r}
+top_3_countries_per_year <- df_death_country %>%
+  group_by(Year) %>%
+  arrange(Year, desc(Number.of.deaths.from.disasters)) %>%
+  slice(1:3) %>%
+  ungroup() %>%
+  mutate(rank = row_number()) %>%
+  ggplot(aes(x = factor(Year), y = Number.of.deaths.from.disasters, fill = factor(rank))) +
+  geom_bar(stat = "identity", position = "dodge") +
+  labs(title = "Top 3 Countries per Year in Terms of Death due to Natural Disasters (2012-2016)",
+       x = "Year",
+       y = "Total Number of Deaths",
+       fill = "Rank") +
+  theme_minimal()
+
+top_3_countries_per_year
+```
+
+
+```{r}
+library(dplyr)
+library(ggplot2)
+
+n_colors <- n_distinct(df_death_country$Country.name)
+color_palette <- setNames(unique(hcl(seq(15, 375, length.out = n_colors + 1))), c(levels(df_death_country$Country.name), "extra"))
+
+top_3_countries_per_year <- df_death_country %>%
+  group_by(Year) %>%
+  arrange(Year, desc(Number.of.deaths.from.disasters)) %>%
+  slice(1:3) %>%
+  ungroup() %>%
+  mutate(rank = row_number()) %>%
+  ggplot(aes(x = factor(Year), y = Number.of.deaths.from.disasters, fill = Country.name)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  labs(title = "Top 3 Countries per Year in Terms of Death due to Natural Disasters (2012-2016)",
+       x = "Year",
+       y = "Total Number of Deaths",
+       fill = "Country") +
+  scale_fill_manual(values = color_palette[1:n_colors],
+                    labels = levels(df_death_country$Country.name)) +
+  theme_minimal()
+
+top_3_countries_per_year
+```
+
+```{r}
+library(dplyr)
+library(ggplot2)
+library(RColorBrewer)
+
+# create a new dataframe that contains the top 3 countries per year
+top_3_countries_per_year <- df_death_country %>%
+  group_by(Year) %>%
+  arrange(Year, desc(Number.of.deaths.from.disasters)) %>%
+  slice(1:3) %>%
+  ungroup()
+
+# create a vector of unique country names
+unique_countries <- top_3_countries_per_year %>% distinct(Country.name) %>% pull(Country.name)
+
+# create a color palette based on the number of unique countries
+n_colors <- min(9, length(unique_countries))
+color_palette <- brewer.pal(n_colors, "Set1")
+
+# create a named vector of colors for each country
+country_colors <- setNames(color_palette, unique_countries[1:length(color_palette)])
+
+# add a new column to the dataframe with the colors for each country
+top_3_countries_per_year <- top_3_countries_per_year %>% mutate(color = country_colors[Country.name])
+
+# create the bar graph
+ggplot(top_3_countries_per_year, aes(x = factor(Year), y = Number.of.deaths.from.disasters, fill = Country.name)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  scale_fill_manual(values = country_colors) +
+  labs(title = "Top 3 Countries per Year in Terms of Death due to Natural Disasters (2012-2022)",
+       x = "Year",
+       y = "Total Number of Deaths",
+       fill = "Country") +
+  theme_minimal()
+
+```
+
+Figure 2: Number of deaths per type of disaster between 2012 and 2022
+```{r}
+ggplot(df_world, aes(x = Year)) +
+  geom_line(aes(y = Number.of.deaths.from.drought, color = "Number.of.deaths.from.drought")) +
+  geom_line(aes(y = Number.of.deaths.from.earthquakes, color = "Number.of.deaths.from.earthquakes")) +
+  geom_line(aes(y = Number.of.deaths.from.volcanic.activity, color = "Number.of.deaths.from.volcanic.activity")) +
+  geom_line(aes(y = Number.of.deaths.from.floods, color = "Number.of.deaths.from.floods")) +
+  geom_line(aes(y = Number.of.deaths.from.mass.movements, color = "Number.of.deaths.from.mass.movements")) +
+  geom_line(aes(y = Number.of.deaths.from.storms, color = "Number.of.deaths.from.storms")) +
+  geom_line(aes(y = Number.of.deaths.from.landslides, color = "Number.of.deaths.from.landslides")) +
+  geom_line(aes(y = Number.of.deaths.from.fog, color = "Number.of.deaths.from.fog")) +
+  geom_line(aes(y = Number.of.deaths.from.wildfires, color = "Number.of.deaths.from.wildfires")) +
+  geom_line(aes(y = Number.of.deaths.from.extreme.temperatures, color = "Number.of.deaths.from.extreme.temperatures")) +
+  geom_line(aes(y = Number.of.deaths.from.glacial.lake.outbursts, color = "Number.of.deaths.from.glacial.lake.outbursts")) +
+  labs(color = "Series") +
+  xlab("X") +
+  ylab("Y") +
+  ggtitle("Line Chart for number of deaths for different types of disasters over the past decade")+
+  scale_x_continuous(breaks = seq(min(total_deaths_by_year$Year), max(total_deaths_by_year$Year), by = 1))
+```
+
+Figure 3:Total number of people affected by natural disasters per region between 2012 and 2022. 
+```{r}
+df_total_affected_region_pivot %>%
+  ggplot() +
+  geom_tile(aes(Country.name,
+  Variable,
+  fill = total.number.of.people.affected)) +
+  scale_fill_viridis_c(option = "C",
+  guide = "legend") +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5)) #rotate x-axis labels by 90 degrees
+```
+
